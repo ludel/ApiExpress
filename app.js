@@ -1,16 +1,22 @@
 const db = require('sqlite');
 const bodyParser = require('body-parser');
 const methodOverride = require('method-override');
+const cookieParser = require('cookie-parser');
+
+const bcrypt = require('bcrypt');
+const saltRounds = 10;
+
 
 const express = require('express');
 const app = express();
+
 const PORT = process.env.PORT || 8080;
 
 // DATABASE
 db.open('expressapi.db').then(() => {
     db.run('CREATE TABLE IF NOT EXISTS users (id, pseudo, email, firstname, lastname, password, createdAt, updatedAt)')
         .then(() => {
-            console.log('> Database ready')
+            console.log('> Database user ready')
         }).catch((err) => { // Si on a eu des erreurs
         console.error('ERR> ', err)
     })
@@ -24,6 +30,9 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({
     extended: true
 }));
+
+// COOKIE PARSER
+app.use(cookieParser());
 
 // Override POST
 app.use(methodOverride('_method'));
@@ -143,19 +152,22 @@ app.post('/users', (req, res, next) => {
     if (!req.body.pseudo || !req.body.email || !req.body.firstname || !req.body.lastname) {
         next(new Error('All fields must be given.'))
     }
+    bcrypt.hash(req.body.password, saltRounds).then(function (hash) {
+        db.run("INSERT INTO users (pseudo, email, firstname, lastname, password, updatedAt, createdAt)" +
+            " VALUES (?, ?, ?, ?, ?, ?, ?)", req.body.pseudo, req.body.email, req.body.firstname, req.body.lastname, hash, new Date(), null)
+            .then(() => {
+                res.format({
+                    html: () => {
+                        res.redirect('/users')
+                    },
+                    json: () => {
+                        res.status(201).send({message: 'success'})
+                    }
+                })
+            }).catch(next)
+    });
 
-    db.run("INSERT INTO users (pseudo, email, firstname, lastname, password, updatedAt, createdAt)" +
-        " VALUES (?, ?, ?, ?, ?, ?, ?)", req.body.pseudo, req.body.email, req.body.firstname, req.body.lastname, req.body.password, new Date(), null)
-        .then(() => {
-            res.format({
-                html: () => {
-                    res.redirect('/users')
-                },
-                json: () => {
-                    res.status(201).send({message: 'success'})
-                }
-            })
-        }).catch(next)
+
 });
 
 // DELETE USER
@@ -187,6 +199,32 @@ app.put('/users/:userId', (req, res, next) => {
             })
         }).catch(next)
 });
+
+// SESSION
+app.get('/session', (req, res, next) => {
+    res.format({
+        html: () => {
+            res.render('session/login', {
+                title: 'Connection',
+                action: '/session'
+            })
+        },
+        json: () => {
+            next(new Error('Bad request'))
+        }
+    })
+});
+
+// GENERATE TOKEN
+app.post('/session', (req, res, next) => {
+    db.get('SELECT password FROM users WHERE id = ?', req.body.userId)
+        .then((user) => {
+            if(bcrypt.compare(req.body.password, user.password)){
+
+            }
+        })
+});
+
 
 // ERROR
 app.use((err, req, res, next) => {

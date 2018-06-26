@@ -219,12 +219,23 @@ app.get('/session', (req, res, next) => {
 app.post('/session', (req, res, next) => {
     db.get('SELECT password FROM users WHERE id = ?', req.body.userId)
         .then((user) => {
-            if(bcrypt.compare(req.body.password, user.password)){
-
+            if (bcrypt.compare(req.body.password, user.password)) {
+                require('crypto').randomBytes(48, function (error, buffer) {
+                    let token = buffer.toString("hex");
+                    db.run("INSERT INTO session VALUES (?,?,?)", req.body.userId, token, new Date(), new Date() + 100000)
+                    res.json({accessToken: token})
+                });
             }
         })
 });
 
+// DELETE TOKEN
+app.delete('/sessions/', (req, res, next) => {
+    console.log(req.params.token);
+    db.run('DELETE FROM sessions WHERE accessToken = ?',req.session.accessToken).then((data) => {
+        res.send('Session deleted')
+    }).catch(next)
+});
 
 // ERROR
 app.use((err, req, res, next) => {
